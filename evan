@@ -1,0 +1,84 @@
+local imgui = require 'imgui'
+local memory = require 'memory'
+local game = require 'game'
+
+-- Settings
+local lockKey = 2 -- Right Mouse Button
+local isLocked = false
+local target = nil
+
+-- Function to get player and enemy bone positions
+local function getBonePosition(entity, boneId)
+    return memory.readVector3(entity.bones[boneId])
+end
+
+-- Function to find the closest enemy to the crosshair
+local function findTarget()
+    local player = game.getLocalPlayer()
+    local enemies = game.getEnemies()
+    local bestTarget = nil
+    local bestDistance = math.huge
+    
+    for _, enemy in ipairs(enemies) do
+        if enemy.isAlive then
+            local bonePos = getBonePosition(enemy, 8) -- Example: Head bone
+            local screenPos = game.worldToScreen(bonePos)
+            if screenPos then
+                local distance = (screenPos.x - game.getCrosshairX())^2 + (screenPos.y - game.getCrosshairY())^2
+                if distance < bestDistance then
+                    bestDistance = distance
+                    bestTarget = enemy
+                end
+            end
+        end
+    end
+    return bestTarget
+end
+
+-- Function to lock onto target
+local function lockOnTarget()
+    if isLocked and target then
+        local bonePos = getBonePosition(target, 8)
+        local aimPos = game.worldToScreen(bonePos)
+        if aimPos then
+            game.moveMouse(aimPos.x, aimPos.y)
+        end
+    end
+end
+
+-- Main UI loop
+imgui.OnRender(function()
+    if imgui.Begin("Player Tracker", nil, imgui.WindowFlags.AlwaysAutoResize) then
+        local player = game.getLocalPlayer()
+        if player then
+            imgui.Text("Player Health: " .. player.health)
+            imgui.Text("Position: " .. tostring(player.position))
+        end
+        
+        imgui.Separator()
+        
+        imgui.Text("Enemies:")
+        local enemies = game.getEnemies()
+        for _, enemy in ipairs(enemies) do
+            if enemy.isAlive then
+                imgui.Text("Enemy " .. enemy.id .. " HP: " .. enemy.health)
+            end
+        end
+        imgui.End()
+    end
+end)
+
+-- Game loop
+game.OnUpdate(function()
+    if game.isKeyDown(lockKey) then
+        if not isLocked then
+            target = findTarget()
+            isLocked = true
+        end
+    else
+        isLocked = false
+        target = nil
+    end
+    
+    lockOnTarget()
+end)
